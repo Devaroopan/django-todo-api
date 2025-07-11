@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ToDo List</title>
+
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" 
+        integrity="sha512-yzXGPbFP4z3R8jym+J9y+3IITl3DUIQ6+bKJiwm+Q2Hi0Bt9I7cB+0tYx7r+rXK3IqD6+I9pPB/qmQ1mMJbwIw==" 
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+  <style>
+    body {
+      background-color: #f8f9fa;
+    }
+    .task-box {
+      background: white;
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .btn-icon {
+      border: none;
+      background: none;
+      margin-left: 5px;
+    }
+    .text-decoration-line-through {
+      opacity: 0.7;
+    }
+  </style>
+</head>
+<body class="container py-5">
+
+  <h1 class="text-center mb-4">📝 ToDo List</h1>
+
+  <div class="mb-3">
+    <input type="text" id="username" class="form-control mb-2" placeholder="Username" autocomplete="off">
+    <input type="password" id="password" class="form-control mb-2" placeholder="Password" autocomplete="new-password">
+    <button onclick="login()" class="btn btn-primary">Login</button>
+    <button onclick="logout()" class="btn btn-outline-danger">Logout</button>
+  </div>
+
+  <div class="mb-3">
+    <input type="text" id="task" class="form-control mb-2" placeholder="New Task">
+    <input type="date" id="due_date" class="form-control mb-2">
+    <button onclick="addTask()" class="btn btn-success">Add Task</button>
+  </div>
+
+  <div id="task-list"></div>
+
+  <script>
+    async function login() {
+      const username = document.getElementById("username").value;
+      const password = document.getElementById("password").value;
+
+      const response = await fetch('/api/token/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        localStorage.setItem("access", data.access);
+        localStorage.setItem("refresh", data.refresh);
+        alert("Login successful!");
+        loadTasks();
+      } else {
+        alert("Login failed!");
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem("access");
+      localStorage.removeItem("refresh");
+      document.getElementById("task-list").innerHTML = "";
+      alert("Logged out!");
+    }
+
+    async function loadTasks() {
+      const token = localStorage.getItem("access");
+
+      const response = await fetch('/api/tasks/', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const taskList = document.getElementById("task-list");
+      taskList.innerHTML = "";
+
+      if (response.ok) {
+        const data = await response.json();
+        data.forEach(task => {
+          const div = document.createElement("div");
+          div.className = "task-box";
+
+          const isCompleted = task.completed ? "text-decoration-line-through text-muted" : "";
+          const completedBadge = task.completed ? '<span class="badge bg-success ms-2">Completed</span>' : '';
+
+          div.innerHTML = `
+            <h5 class="${isCompleted}">${task.title} ${completedBadge}</h5>
+            <p class="${isCompleted}">Due: ${task.due_date || 'Not set'}</p>
+            <button class="btn-icon" onclick="markComplete(${task.id})" title="Mark as complete">
+              <i class="fas fa-check text-success"></i> ✅
+            </button>
+            <button class="btn-icon" onclick="deleteTask(${task.id})" title="Delete task">
+              <i class="fas fa-trash text-danger"></i> 🗑️
+            </button>
+          `;
+
+          taskList.appendChild(div);
+        });
+      } else {
+        console.error("Failed to load tasks");
+      }
+    }
+
+    async function addTask() {
+      const token = localStorage.getItem("access");
+      const title = document.getElementById("task").value;
+      const due_date = document.getElementById("due_date").value;
+
+      const response = await fetch('/api/tasks/', {
+        method: 'POST',
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: title,
+          due_date: due_date || null,
+          completed: false,
+          description: "",
+          priority: "Medium"
+        })
+      });
+
+      if (response.ok) {
+        document.getElementById("task").value = "";
+        document.getElementById("due_date").value = "";
+        loadTasks();
+      } else {
+        alert("Task creation failed!");
+      }
+    }
+
+    async function deleteTask(taskId) {
+      const token = localStorage.getItem("access");
+      const response = await fetch(`/api/tasks/${taskId}/`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        loadTasks();
+      } else {
+        alert("Delete failed");
+      }
+    }
+
+    async function markComplete(taskId) {
+      const token = localStorage.getItem("access");
+      const response = await fetch(`/api/tasks/${taskId}/`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ completed: true })
+      });
+
+      if (response.ok) {
+        loadTasks();
+      } else {
+        alert("Failed to update task");
+      }
+    }
+
+    window.onload = () => {
+      if (localStorage.getItem("access")) {
+        loadTasks();
+      }
+    };
+  </script>
+</body>
+</html>
